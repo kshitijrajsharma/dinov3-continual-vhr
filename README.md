@@ -188,8 +188,6 @@ argument to vary the layer-wise decay, for example `sbatch slurm/train_vitl.sbat
 
 ## License
 
-Copyright 2026 Kshitij Raj Sharma.
-
 The code in this repository is licensed under the Apache License 2.0; see [LICENSE](LICENSE).
 
 The released checkpoint is a derivative of DINOv3 and follows Meta's DINOv3 License
