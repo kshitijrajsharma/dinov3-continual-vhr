@@ -35,7 +35,7 @@ See [pretraining_datasets.md](pretraining_datasets.md) for the full breakdown, l
 
 ## Training
 
-There is one model being trained, the student. It learns from two teachers that produce no
+There is one model being trained, the student. It learns from two teachers that do not produce
 gradients: an exponential moving average (EMA) of the student, and an anchor teacher that
 provides a preservation reference.
 
@@ -133,38 +133,59 @@ differently from a model trained from scratch. Results should be read with that 
 
 ## Run
 
-The project uses `uv` and `just`.
+The project uses `uv` and `just`. `just setup` installs the training dependencies. `just
+setup-eval` adds the pinned pangaea benchmark and its dependencies; the suite runs in that
+environment.
 
 ### Use the published checkpoint
 
 The reported model (anchor-free control, uniform LR 5e-5, seed 42, ~2k steps) is published at
 [kshitijrajsharma/dinov3](https://huggingface.co/kshitijrajsharma/dinov3) as
-`vitl_control_lr5e5_s42_step2k.pth`. Download it and evaluate under the frozen-encoder suite
-(`--name` only labels the results table, so any name works):
+`vitl_control_lr5e5_s42_step2k.pth`. Download it and score it under the frozen-encoder suite:
 
 ```bash
-just setup
+just setup-eval
 uv run hf download kshitijrajsharma/dinov3 vitl_control_lr5e5_s42_step2k.pth --local-dir checkpoints
 uv run --group eval python -m dinov3_vhr.eval.run_suite \
   --checkpoint checkpoints/vitl_control_lr5e5_s42_step2k.pth --name vitl_gram0
 ```
 
+The installed pangaea wheel ships the code but not the hydra `configs/` tree, so the runner
+fetches the pinned [pangaea VHR benchmark](https://github.com/Evameijling/pangaea-bench-2.0)
+source once into a cache on first use, or uses a checkout passed with `--pangaea-root`. Each
+benchmark dataset downloads from Hugging Face the first time it is used. `--name` labels the
+encoder in the results table.
+
+The command above scores a four-dataset subset at the 10 percent label fraction. To reproduce
+the full published results, score every dataset at the 100 percent fraction:
+
+```bash
+uv run --group eval python -m dinov3_vhr.eval.run_suite \
+  --checkpoint checkpoints/vitl_control_lr5e5_s42_step2k.pth --name vitl_gram0 \
+  --datasets spacenet2 spacenet3 flair2 hot_buildings xview2 pureforest mpv4ger opencanopy everwatch nzcattle_det \
+  --limited-label 1.0
+```
+
+Set `--limited-label 0.1` for the 10 percent fraction; both run the three seeds 42, 1234, 2025.
+
+Add `--fast-dev` for a one-epoch wiring check, and collect the per-dataset metrics with
+`dinov3_vhr.eval.collect_results`.
+
 ### Reproduce the pretraining
+
+1. Stage the pretraining corpus: download the tile shards from Hugging Face and build the probe
+   sets.
+2. Run continual pretraining of the reported ViT-L model, the anchor-free control (`gram0`) at
+   uniform layer-wise LR (`layer_decay` 1.0, the launcher default), over three seeds. Each run
+   writes `out/vitl_gram0_s<seed>_epoch1.pth`, the ~2k-step end-of-pass checkpoint.
+3. Evaluate a checkpoint on the pangaea VHR benchmark suite.
 
 ```bash
 just setup
-
-# 1. Stage the pretraining corpus: download the tile shards from HF and build the probe sets
 sbatch slurm/stage_data.sbatch
-
-# 2. Continual pretraining of the reported ViT-L model: the anchor-free control (gram0) at
-#    uniform layer-wise LR (layer_decay 1.0, the launcher default), three seeds. Each run
-#    writes out/vitl_gram0_s<seed>_epoch1.pth, the ~2k-step end-of-pass checkpoint.
 sbatch slurm/train_vitl.sbatch gram0 42
 sbatch slurm/train_vitl.sbatch gram0 1234
 sbatch slurm/train_vitl.sbatch gram0 2025
-
-# 3. Evaluate a checkpoint on the pangaea VHR benchmark suite
 uv run --group eval python -m dinov3_vhr.eval.run_suite \
   --checkpoint out/vitl_gram0_s42_epoch1.pth --name vitl_gram0
 ```

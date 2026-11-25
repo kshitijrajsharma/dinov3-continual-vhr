@@ -1,9 +1,13 @@
 set shell := ["bash", "-cu"]
 
-# install dependencies and the pre-commit hooks
+# install training dependencies and the pre-commit hooks
 setup:
-    uv sync --all-groups
+    uv sync
     uv run pre-commit install --install-hooks --hook-type pre-commit --hook-type commit-msg
+
+# add the optional evaluation dependencies (pulls the pinned pangaea benchmark)
+setup-eval:
+    uv sync --group eval
 
 # run all pre-commit hooks (ruff fix, ruff format, ty, file hygiene)
 lint:
