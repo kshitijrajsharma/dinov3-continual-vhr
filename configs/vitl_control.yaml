@@ -1,0 +1,55 @@
+# ViT-L continued pretraining (control + winner arm): the capacity test for the ViT-S negative
+# and the anchor re-test at scale. sweep.py expands arms x learning_rates x seeds into runs.
+
+name_prefix: vitl
+
+base:
+  model: vit_large_patch16_dinov3.lvd1689m
+  data_dir: data/tiles
+  probe_root: data/probes
+  devices: 2
+  batch_size: 32
+  accumulate: 8            # batch_size * devices * accumulate = 512
+  epoch_tiles: 1018163     # full corpus, one pass per epoch
+  ckpt_every: 1
+  freeze_backbone_steps: 1000
+  backbone_warmup_steps: 500
+  layer_decay: 1.0          # uniform layer-wise LR (reported arm); train.py default 0.9 is the ablation
+  grad_clip: 3.0
+  num_workers: 8
+  monitor_every: 250
+  anchor_target: frozen
+  anchor_refresh_steps: 2000
+  anchor_max_refreshes: 3
+
+schedule:
+  effective_batch: 512
+  steps_per_epoch: 1988    # epoch_tiles / effective_batch
+  total_steps: 5964
+  epochs: 3
+  checkpoint_steps: [2000, 4000, 6000]
+
+seeds: [42, 1234, 2025]
+
+learning_rates: [5.0e-5]
+
+arms:
+  control:
+    gram_weight: 0.0
+    cls_anchor_weight: 0.0
+  winner:                  # patch + CLS anchor, frozen target from base
+    gram_weight: 2.0
+    cls_anchor_weight: 1.0
+
+eval:
+  datasets: [flair2, pureforest, opencanopy, nzcattle_det, mpv4ger, everwatch]
+  limited_label_train: 0.1
+  steps: [2000, 4000, 6000]
+
+slurm:
+  partition: longrun
+  gres: gpu:a100:2
+  cpus_per_task: 8
+  mem: 128G
+  time: "3-00:00:00"
+  script: slurm/train_sweep_ddp.sbatch

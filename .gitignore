@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+.ruff_cache/
+.pytest_cache/
+
+# Virtual environments
+.venv
+
+# Claude Code
+.claude/
+
+# Data and run artifacts (repo-root only, so the dinov3_vhr/data package is kept)
+/data/
+/out/
+/results/
+docs/oam_map.png
+*.pth
+*.ckpt

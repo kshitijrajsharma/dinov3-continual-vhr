@@ -1,0 +1,70 @@
+# Structural confirmation sweep for the ViT-S winner (frozen anchor + CLS).
+#
+# Purpose: confirm the ablation decisions with real error bars.
+#   Q1 (frozen > refresh) and Q2 (CLS helps) were single-seed, single-step. This sweep
+#   re-runs the hand-picked configs at 3 seeds, reads the training-step sweet spot from
+#   each run's dose-response checkpoints (every 1000 steps), and optionally sweeps LR.
+#
+# Runs expand as: arms x learning_rates x seeds.
+#   3 arms x 1 LR x 3 seeds = 9 runs, each an 8k dose-response.
+#   Add values to learning_rates to widen into an LR grid (e.g. 3 arms x 2 LR x 3 seeds = 18).
+
+name_prefix: vits
+
+base:
+  model: vit_small_patch16_dinov3.lvd1689m
+  data_dir: data/tiles
+  probe_root: data/probes
+  devices: 1
+  batch_size: 32
+  accumulate: 4            # effective batch = batch_size * accumulate = 128
+  epoch_tiles: 128000     # tiles per epoch
+  ckpt_every: 1           # save a checkpoint every epoch
+  freeze_backbone_steps: 250
+  backbone_warmup_steps: 125
+  grad_clip: 3.0
+  num_workers: 8
+  monitor_every: 250
+  anchor_target: frozen         # Q1: frozen beat the self-snapshot refresh
+  anchor_refresh_steps: 1500    # ignored when anchor_target=frozen
+  anchor_max_refreshes: 3
+
+# Training-step schedule. Step is NOT a separate swept axis: each run trains once to
+# total_steps and checkpoints along the way, so one run yields the entire dose-response.
+# The sweet-spot step is then read from the eval curve (eval.steps below), not searched
+# with extra jobs. epochs is derived so that total_steps is reached.
+schedule:
+  effective_batch: 128                                   # batch_size * accumulate
+  steps_per_epoch: 1000                                  # epoch_tiles / effective_batch
+  total_steps: 8000                                      # the longest we train (~1.03M tiles)
+  epochs: 8                                              # total_steps / steps_per_epoch
+  checkpoint_steps: [1000, 2000, 3000, 4000, 5000, 6000, 7000, 8000]
+
+seeds: [42, 1234, 2025]
+
+learning_rates: [5.0e-5]   # add 1.0e-4 (and 2.0e-4) to sweep LR
+
+# Hand-picked configurations. Each arm sets only what differs from base.
+arms:
+  control:        # plain continued pretraining, no anchor (baseline for "does the anchor help")
+    gram_weight: 0.0
+    cls_anchor_weight: 0.0
+  patch_only:     # patch (Gram) anchor alone: the dense-preservation thesis, CLS off
+    gram_weight: 2.0
+    cls_anchor_weight: 0.0
+  winner:         # patch + CLS anchor: also holds classification (the deployed config)
+    gram_weight: 2.0
+    cls_anchor_weight: 1.0
+
+eval:
+  datasets: [flair2, pureforest, opencanopy, nzcattle_det]
+  limited_label_train: 0.1
+  steps: [2000, 4000, 6000, 8000]   # dose-response points to evaluate per run (every 2k)
+
+slurm:
+  partition: shortrun
+  gres: gpu:a100:1
+  cpus_per_task: 16
+  mem: 64G
+  time: "14:00:00"
+  script: slurm/train_sweep.sbatch

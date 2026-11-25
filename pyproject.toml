@@ -1,0 +1,83 @@
+[build-system]
+requires = ["uv_build>=0.11.8,<0.12"]
+build-backend = "uv_build"
+
+[project]
+name = "dinov3-vhr"
+version = "0.0.1"
+description = "Continual self-supervised training of DINOv3 for VHR specific tasks"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "boto3>=1.43.40",
+    "datasets>=5.0.0",
+    "h3>=4.5.0",
+    "lightly>=1.5.25",
+    "omegaconf>=2.3.1",
+    "pillow>=12.2.0",
+    "pyproj>=3.7.2",
+    "pytorch-lightning>=2.6.5",
+    "rasterio>=1.5.0",
+    "requests>=2.34.2",
+    "scikit-learn>=1.9.0",
+    "shapely>=2.1.2",
+    "timm>=1.0.27",
+    "torch>=2.7,<2.8",
+    "torchgeo>=0.9.0",
+    "torchvision>=0.22,<0.23",
+    "webdataset>=1.0.2",
+]
+
+# Cluster A100 driver is 535 (CUDA 12.2); torch 2.12 only ships CUDA >=12.6 builds,
+# so the stack is pinned to the newest CUDA 11.8 build (torch 2.7.1) that runs on it.
+[[tool.uv.index]]
+name = "pytorch-cu118"
+url = "https://download.pytorch.org/whl/cu118"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu118" }
+torchvision = { index = "pytorch-cu118" }
+pangaea = { git = "https://github.com/kshitijrajsharma/pangaea-bench2.0.git", rev = "run" }
+
+[tool.uv.build-backend]
+module-root = ""
+
+[dependency-groups]
+dev = [
+    "commitizen>=4.20.1",
+    "playwright>=1.61.0",
+    "pre-commit>=4.7.0",
+    "pytest>=9.1.1",
+    "ruff>=0.15.19",
+    "ty>=0.0.52",
+]
+eval = [
+    "pangaea",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["dinov3_vhr", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Generates a standalone HTML map; its long lines are embedded CSS/JS, not Python.
+"dinov3_vhr/data/build_coverage_html.py" = ["E501"]
+
+[tool.ty.src]
+include = ["dinov3_vhr", "tests"]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.0.1"
+version_files = ["pyproject.toml:version"]
+tag_format = "v$version"
+major_version_zero = true
